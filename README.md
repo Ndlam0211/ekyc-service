@@ -1,10 +1,12 @@
-# Java API Service Starter
+# ekyc-service
+This is a backend service for handling Electronic Know Your Customer (eKYC) processes. It provides APIs to support identity verification workflows such as:
 
-This is a minimal Java API service starter based on [Google Cloud Run Quickstart](https://cloud.google.com/run/docs/quickstarts/build-and-deploy/deploy-java-service).
+Document upload and OCR (e.g. ID cards, passports)
 
-## Getting Started
+Face matching and liveness detection
 
-Server should run automatically when starting a workspace. To run manually, run:
-```sh
-mvn spring-boot:run
-```
+User identity validation and onboarding
+
+Integration with third-party verification providers(OCR APIs of FPT.ai)
+
+Built with Spring Boot, this service is modular, scalable, and designed to integrate easily into larger onboarding or compliance systems. 
