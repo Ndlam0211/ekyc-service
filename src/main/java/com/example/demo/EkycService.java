@@ -2,6 +2,7 @@ package com.example.demo;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.demo.EkycService.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -22,29 +23,61 @@ public class EkycService {
     private FptOcrClient fptOcrClient;
 
     public EkycResult performOcr(MultipartFile frontImage, MultipartFile backImage) throws IOException {
+        String frontResponse = null;
+        String backResponse = null;
+
+        EkycResult result = new EkycResult();
+
         try {
-            String response = fptOcrClient.recognizeId(fptApiKey, frontImage, backImage);
+            frontResponse = fptOcrClient.recognizeFrontId(fptApiKey, frontImage);
+        } catch (Exception e) {
+            System.err.println("Error calling FPT.AI OCR API for front image: " + e.getMessage());
+            throw new EkycException("Error calling FPT.AI OCR API for front image", e);
+        }
 
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(response);
+        try {
+            backResponse = fptOcrClient.recognizeBackId(fptApiKey, backImage);
+        } catch (Exception e) {
+            System.err.println("Error calling FPT.AI OCR API for back image: " + e.getMessage());
+            throw new EkycException("Error calling FPT.AI OCR API for back image", e);
+        }
 
-            int errorCode = root.path("errorCode").asInt();
-            String errorMessage = root.path("errorMessage").asText();
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode frontRoot = null;
+        JsonNode backRoot = null;
+
+        try {
+            if(frontResponse != null) {
+                frontRoot = mapper.readTree(frontResponse);
+            }
+        } catch (Exception e) {
+            System.err.println("Error parsing FPT.AI OCR API response for front image: " + e.getMessage());
+            throw new EkycException("Error parsing FPT.AI OCR API response for front image", e);
+        }
+
+        try {
+            if (backResponse != null) {
+                backRoot = mapper.readTree(backResponse);
+            }
+        } catch (Exception e) {
+            System.err.println("Error parsing FPT.AI OCR API response for back image: " + e.getMessage());
+            throw new EkycException("Error parsing FPT.AI OCR API response for back image", e);
+        }
+
+
+        if (frontRoot != null) {
+            int errorCode = frontRoot.path("errorCode").asInt();
+            String errorMessage = frontRoot.path("errorMessage").asText();
 
             if (errorCode == 0) {
-                JsonNode dataNode = root.path("data");
-                // Assuming front image data is the first element and back image is the second, or adjust based on actual API behavior
+                JsonNode dataNode = frontRoot.path("data");
                 JsonNode frontData = dataNode.size() > 0 ? dataNode.get(0) : null;
-                JsonNode backData = dataNode.size() > 1 ? dataNode.get(1) : null;
-
-                EkycResult result = new EkycResult();
                 result.setFrontIdData(frontData != null ? frontData.toString() : null);
-                result.setBackIdData(backData != null ? backData.toString() : null);
-                return result;
             } else {
+                System.err.println("FPT.AI OCR API returned an error for front image: " + errorCode + " - " + errorMessage);
                 switch (errorCode) {
                     case 1:
-                        throw new InvalidParameterException("Invalid Parameters or Values!" + errorMessage);
+                        throw new InvalidParameterException("Invalid Parameters or Values! " + errorMessage);
                     case 2:
                         throw new CroppingFailedException("Failed in cropping: " + errorMessage);
                     case 3:
@@ -62,12 +95,66 @@ public class EkycService {
                     case 10:
                         throw new InvalidBase64Exception("String base64 is not valid: " + errorMessage);
                     default:
-                        throw new EkycException("FPT.AI OCR API returned an error: " + errorCode + " - " + errorMessage);
+                        throw new EkycException("FPT.AI OCR API returned an error for front image: " + errorCode + " - " + errorMessage);
                 }
             }
-        } catch (Exception e) {
-            System.err.println("Error calling FPT.AI OCR API: " + e.getMessage());
-            throw new EkycException("Error calling FPT.AI OCR API", e);
+        }
+
+        if (backRoot != null) {
+            int errorCode = backRoot.path("errorCode").asInt();
+            String errorMessage = backRoot.path("errorMessage").asText();
+
+            if (errorCode == 0) {
+                JsonNode dataNode = backRoot.path("data");
+                JsonNode backData = dataNode.size() > 0 ? dataNode.get(0) : null;
+                result.setBackIdData(backData != null ? backData.toString() : null);
+            } else {
+                System.err.println("FPT.AI OCR API returned an error for back image: " + errorCode + " - " + errorMessage);
+                switch (errorCode) {
+                    case 1:
+                        throw new InvalidParameterException("Invalid Parameters or Values! " + errorMessage);
+                    case 2:
+                        throw new CroppingFailedException("Failed in cropping: " + errorMessage);
+                    case 3:
+                        throw new IdNotFoundException("Unable to find ID card in the image: " + errorMessage);
+                    case 5:
+                        throw new NoUrlException("No URL in the request: " + errorMessage);
+                    case 6:
+                        throw new UrlOpenFailedException("Failed to open the URL!: " + errorMessage);
+                    case 7:
+                        throw new InvalidImageFileException("Invalid image file: " + errorMessage);
+                    case 8:
+                        throw new BadDataException("Bad data: " + errorMessage);
+                    case 9:
+                        throw new NoBase64Exception("No string base64 in the request: " + errorMessage);
+                    case 10:
+                        throw new InvalidBase64Exception("String base64 is not valid: " + errorMessage);
+                    default:
+                        throw new EkycException("FPT.AI OCR API returned an error for back image: " + errorCode + " - " + errorMessage);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // Helper class to wrap InputStream as Resource for RestTemplate
+    private static class MultipartInputStreamFileResource extends org.springframework.core.io.InputStreamResource {
+        private final String filename;
+
+        MultipartInputStreamFileResource(java.io.InputStream inputStream, String filename) {
+            super(inputStream);
+            this.filename = filename;
+        }
+
+        @Override
+        public String getFilename() {
+            return this.filename;
+        }
+
+        @Override
+        public long contentLength() throws IOException {
+            return -1;
         }
     }
 

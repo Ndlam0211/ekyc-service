@@ -11,9 +11,14 @@ import org.springframework.web.multipart.MultipartFile;
 public interface FptOcrClient {
 
     @PostMapping(value = "/idr/vnm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    String recognizeId(
+    String recognizeFrontId(
             @RequestHeader("api-key") String apiKey,
-            @RequestPart("image1") MultipartFile image1,
-            @RequestPart("image2") MultipartFile image2
+            @RequestPart("image") MultipartFile image
+    );
+
+    @PostMapping(value = "/idr/vnm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    String recognizeBackId(
+            @RequestHeader("api-key") String apiKey,
+            @RequestPart("image") MultipartFile image
     );
 }

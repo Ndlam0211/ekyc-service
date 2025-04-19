@@ -33,3 +33,5 @@ build/
 .vscode/
 
 .idx/
+
+project.toml
